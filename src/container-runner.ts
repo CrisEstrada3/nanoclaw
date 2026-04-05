@@ -8,6 +8,8 @@ import os from 'os';
 import path from 'path';
 
 import {
+  ANTHROPIC_API_KEY,
+  CLAUDE_CODE_OAUTH_TOKEN,
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
   CONTAINER_TIMEOUT,
@@ -186,6 +188,21 @@ function buildVolumeMounts(
     });
   }
 
+  // Mount host Claude credentials (subscription auth) into the container so
+  // Claude Code can authenticate without needing an API key.
+  const hostCredentials = path.join(
+    process.env.HOME || os.homedir(),
+    '.claude',
+    '.credentials.json',
+  );
+  if (fs.existsSync(hostCredentials)) {
+    mounts.push({
+      hostPath: hostCredentials,
+      containerPath: '/home/node/.claude/.credentials.json',
+      readonly: true,
+    });
+  }
+
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
@@ -267,6 +284,15 @@ async function buildContainerArgs(
       { containerName },
       'OneCLI gateway not reachable — container will have no credentials',
     );
+  }
+
+  // Inject OAuth token or API key directly when present.
+  // Claude Code uses CLAUDE_CODE_OAUTH_TOKEN for subscription auth (OAuth flow),
+  // which bypasses the x-api-key mechanism OneCLI proxies.
+  if (CLAUDE_CODE_OAUTH_TOKEN) {
+    args.push('-e', `CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}`);
+  } else if (ANTHROPIC_API_KEY) {
+    args.push('-e', `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`);
   }
 
   // Runtime-specific args for host gateway resolution

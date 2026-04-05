@@ -10,6 +10,8 @@ const envConfig = readEnvFile([
   'ASSISTANT_HAS_OWN_NUMBER',
   'ONECLI_URL',
   'TZ',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+  'ANTHROPIC_API_KEY',
 ]);
 
 export const ASSISTANT_NAME =
@@ -95,3 +97,11 @@ function resolveConfigTimezone(): string {
   return 'UTC';
 }
 export const TIMEZONE = resolveConfigTimezone();
+
+// Credentials passed directly to containers (subscription OAuth token or API key).
+// OneCLI is preferred when available; these are used as a fallback for OAuth tokens
+// that OneCLI cannot inject via the x-api-key proxy mechanism.
+export const CLAUDE_CODE_OAUTH_TOKEN =
+  process.env.CLAUDE_CODE_OAUTH_TOKEN || envConfig.CLAUDE_CODE_OAUTH_TOKEN;
+export const ANTHROPIC_API_KEY =
+  process.env.ANTHROPIC_API_KEY || envConfig.ANTHROPIC_API_KEY;
