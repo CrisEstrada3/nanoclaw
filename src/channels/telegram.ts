@@ -5,6 +5,7 @@ import path from 'path';
 import { Api, Bot } from 'grammy';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
+import { processImage } from '../image.js';
 import { readEnvFile } from '../env.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
 import { logger } from '../logger.js';
@@ -90,7 +91,10 @@ export class TelegramChannel implements Channel {
       const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
       const resp = await fetch(fileUrl);
       if (!resp.ok) {
-        logger.warn({ fileId, status: resp.status }, 'Telegram file download failed');
+        logger.warn(
+          { fileId, status: resp.status },
+          'Telegram file download failed',
+        );
         return null;
       }
 
@@ -236,7 +240,7 @@ export class TelegramChannel implements Channel {
     const storeMedia = (
       ctx: any,
       placeholder: string,
-      opts?: { fileId?: string; filename?: string },
+      opts?: { fileId?: string; filename?: string; processPhoto?: boolean },
     ) => {
       const chatJid = `tg:${ctx.chat.id}`;
       const group = this.opts.registeredGroups()[chatJid];
@@ -279,14 +283,36 @@ export class TelegramChannel implements Channel {
           opts.filename ||
           `${placeholder.replace(/[\[\] ]/g, '').toLowerCase()}_${msgId}`;
         this.downloadFile(opts.fileId, group.folder, filename).then(
-          (filePath) => {
+          async (filePath) => {
+            if (filePath && opts?.processPhoto) {
+              try {
+                const groupDir = resolveGroupFolderPath(group.folder);
+                const hostPath = path.join(
+                  groupDir,
+                  'attachments',
+                  path.basename(filePath),
+                );
+                const buffer = fs.readFileSync(hostPath);
+                const captionText = ctx.message.caption ?? '';
+                const result = await processImage(buffer, groupDir, captionText);
+                if (result) {
+                  deliver(result.content);
+                  return;
+                }
+              } catch (err) {
+                logger.warn({ err }, 'Image - processing failed');
+              }
+            }
             if (filePath) {
               deliver(`${placeholder} (${filePath})${caption}`);
             } else {
               deliver(`${placeholder}${caption}`);
             }
           },
-        );
+        ).catch((err) => {
+          logger.warn({ err }, 'File download failed, delivering placeholder');
+          deliver(`${placeholder}${caption}`);
+        });
         return;
       }
 
@@ -300,6 +326,7 @@ export class TelegramChannel implements Channel {
       storeMedia(ctx, '[Photo]', {
         fileId: largest?.file_id,
         filename: `photo_${ctx.message.message_id}`,
+        processPhoto: true,
       });
     });
     this.bot.on('message:video', (ctx) => {
