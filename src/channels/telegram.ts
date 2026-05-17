@@ -282,8 +282,8 @@ export class TelegramChannel implements Channel {
         const filename =
           opts.filename ||
           `${placeholder.replace(/[\[\] ]/g, '').toLowerCase()}_${msgId}`;
-        this.downloadFile(opts.fileId, group.folder, filename).then(
-          async (filePath) => {
+        this.downloadFile(opts.fileId, group.folder, filename)
+          .then(async (filePath) => {
             if (filePath && opts?.processPhoto) {
               try {
                 const groupDir = resolveGroupFolderPath(group.folder);
@@ -294,7 +294,11 @@ export class TelegramChannel implements Channel {
                 );
                 const buffer = fs.readFileSync(hostPath);
                 const captionText = ctx.message.caption ?? '';
-                const result = await processImage(buffer, groupDir, captionText);
+                const result = await processImage(
+                  buffer,
+                  groupDir,
+                  captionText,
+                );
                 if (result) {
                   deliver(result.content);
                   return;
@@ -308,11 +312,14 @@ export class TelegramChannel implements Channel {
             } else {
               deliver(`${placeholder}${caption}`);
             }
-          },
-        ).catch((err) => {
-          logger.warn({ err }, 'File download failed, delivering placeholder');
-          deliver(`${placeholder}${caption}`);
-        });
+          })
+          .catch((err) => {
+            logger.warn(
+              { err },
+              'File download failed, delivering placeholder',
+            );
+            deliver(`${placeholder}${caption}`);
+          });
         return;
       }
 
